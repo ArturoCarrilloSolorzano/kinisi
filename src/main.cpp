@@ -17,6 +17,10 @@ g++ -std=c++17 ./src/*.cpp -o prog  ./src/glad.c -I./include -lSDL2 -ldl
 #include <string>
 #include <fstream>
 
+// Our libraries
+
+#include "./Camera.hpp"
+
 // GLOBALS
 int gScreenHeight = 480;
 int gScreenWidth = 640;
@@ -36,8 +40,11 @@ GLuint gIndexBufferObject = 0;
 // Program Object (for our shaders)
 GLuint gGraphicsPipelineShaderProgram = 0;
 
-float g_uOffset = 0.0f;
+float g_uOffset = -2.0f;
 float g_uRotate = 0.0f;
+float g_uScale = 0.5f;
+
+Camera gCamera;
 // Error Handler
 
 static void
@@ -97,24 +104,75 @@ void VertexSpecification()
 
     // Lives on the CPU
     const std::vector<GLfloat> vertexData{
-        // First Triangle
-        -0.5f, -0.5f, -1.0f,          // vertex 1 Left
-        0.57647f, 0.47843f, 1.00000f, // color
+        // Front Face
+        -0.5f, -0.5f, 0.0f, // vertex 1 Left
+        1.f, 1.f, 0.0f,     // color
 
-        0.5f, -0.5f, -1.0f,           // vertex 2 Right
-        0.57647f, 0.47843f, 1.00000f, // color
+        0.5f, -0.5f, 0.0f, // vertex 2 Right
+        1.f, 1.f, 0.0f,    // color
 
-        -0.5f, 0.5f, -1.0f,           // vertex 3 Top Left
-        0.57647f, 0.47843f, 1.00000f, // color
+        -0.5f, 0.5f, 0.0f, // vertex 3 Top Left
+        1.f, 1.f, 0.0f,    // color
 
         // Second Triangle
 
-        0.5f, 0.5f, -1.0f,            // vertex 3 Top Right
-        0.57647f, 0.47843f, 1.00000f, // color
+        0.5f, 0.5f, 0.0f, // vertex 3 Top Right
+        1.f, 1.f, 0.0f,   // color
+
+        // Back Face
+        -0.5f, -0.5f, -1.0f, // vertex 1 Left
+        0.5f, 1.0f, 0.5f,    // color
+
+        0.5f, -0.5f, -1.0f, // vertex 2 Right
+        0.5f, 1.0f, 0.5f,   // color
+
+        -0.5f, 0.5f, -1.0f, // vertex 3 Top Left
+        0.5f, 1.0f, 0.5f,   // color
+
+        // Second Triangle
+
+        0.5f, 0.5f, -1.0f, // vertex 3 Top Right
+        0.5f, 1.0f, 0.5f,  // color
+
+        // Top Face
+        -0.5f, 0.5f, 0.0f, // vertex 1 Left
+        1.f, 0.5f, 0.0f,   // color
+
+        0.5f, 0.5f, 0.0f, // vertex 2 Right
+        1.f, 0.5f, 0.0f,  // color
+
+        -0.5f, 0.5f, -1.0f, // vertex 3 Top Left
+        1.f, 0.5f, 0.0f,    // color
+
+        // Second Triangle
+
+        0.5f, 0.5f, -1.0f, // vertex 3 Top Right
+        1.f, 0.5f, 0.0f,   // color
 
     };
 
-    const std::vector<GLuint> indexBufferData{2, 0, 1, 3, 2, 1};
+    const std::vector<GLuint> indexBufferData{
+        // FrontFace
+        2,
+        0,
+        1,
+        3,
+        2,
+        1,
+        // BackFace
+        6,
+        4,
+        5,
+        7,
+        6,
+        5,
+        // TopFace
+        10,
+        8,
+        9,
+        11,
+        10,
+        9};
 
     // Setting things up on the gpu
     glGenVertexArrays(1, &gVertexArrayObject);
@@ -145,7 +203,7 @@ void VertexSpecification()
                           GL_FLOAT, // X, Y, Z, R, G, B
                           GL_FALSE,
                           sizeof(GL_FLOAT) * 6,
-                          (void *)0);
+                          (GLvoid *)0);
 
     // Color information
     glEnableVertexAttribArray(1);
@@ -285,6 +343,8 @@ void InitializeProgram()
 void Input()
 {
     SDL_Event e;
+    float speed = 0.1f;
+    int mouseX, mouseY;
 
     while (SDL_PollEvent(&e) != 0)
     {
@@ -293,28 +353,31 @@ void Input()
             std::cout << "Adios" << std::endl;
             gQuit = true;
         }
+        else if (e.type == SDL_MOUSEMOTION)
+        {
+            mouseX += e.motion.xrel;
+            mouseY += e.motion.yrel;
+            gCamera.MouseLook(mouseX, mouseY);
+        }
     }
 
+    // g_uOffset -= 0.01f;
     const Uint8 *state = SDL_GetKeyboardState(NULL);
-    if (state[SDL_SCANCODE_UP])
+    if (state[SDL_SCANCODE_UP] || state[SDL_SCANCODE_W])
     {
-        g_uOffset += 0.01f;
-        std::cout << "g_uOffset: " << g_uOffset << std::endl;
+        gCamera.MoveForward(speed);
     }
-    if (state[SDL_SCANCODE_DOWN])
+    if (state[SDL_SCANCODE_DOWN] || state[SDL_SCANCODE_S])
     {
-        g_uOffset -= 0.01f;
-        std::cout << "g_uOffset: " << g_uOffset << std::endl;
+        gCamera.MoveBackward(speed);
     }
-    if (state[SDL_SCANCODE_LEFT])
+    if (state[SDL_SCANCODE_LEFT] || state[SDL_SCANCODE_A])
     {
-        g_uRotate -= 1.0f;
-        std::cout << "g_uRotate: " << g_uRotate << std::endl;
+        gCamera.MoveLeft(speed);
     }
-    if (state[SDL_SCANCODE_RIGHT])
+    if (state[SDL_SCANCODE_RIGHT] || state[SDL_SCANCODE_D])
     {
-        g_uRotate += 1.0f;
-        std::cout << "g_uRotate: " << g_uRotate << std::endl;
+        gCamera.MoveRight(speed);
     }
 }
 
@@ -334,10 +397,16 @@ void PreDraw()
     // use our shader
     glUseProgram(gGraphicsPipelineShaderProgram);
 
-    // Model transformation by translating our object
+    g_uRotate -= 0.1f;
+    // std::cout << "g_uRotate: " << g_uRotate << std::endl;
+
     glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, g_uOffset));
-    // Rotation matrix
+
+    // Model transformation by translating our object
     model = glm::rotate(model, glm::radians(g_uRotate), glm::vec3(0.0f, 1.0f, 0.0f));
+    // Rotation matrix
+
+    model = glm::scale(model, glm::vec3(g_uScale, g_uScale, g_uScale));
 
     GLint u_ModelMatrixLocation = glGetUniformLocation(gGraphicsPipelineShaderProgram, "u_ModelMatrix");
 
@@ -348,6 +417,20 @@ void PreDraw()
     else
     {
         std::cout << "Could not find u_ModelMatrix, maybe a misspelling?" << std::endl;
+        exit(EXIT_FAILURE);
+    }
+
+    glm::mat4 view = gCamera.GetViewMatrix();
+
+    GLint u_ViewLocation = glGetUniformLocation(gGraphicsPipelineShaderProgram, "u_ViewMatrix");
+
+    if (u_ViewLocation >= 0)
+    {
+        glUniformMatrix4fv(u_ViewLocation, 1, GL_FALSE, &view[0][0]);
+    }
+    else
+    {
+        std::cout << "Could not find u_ViewMatrix, maybe a misspelling?" << std::endl;
         exit(EXIT_FAILURE);
     }
 
@@ -375,28 +458,27 @@ void Draw()
 
     // Enable our attributes
     glBindVertexArray(gVertexArrayObject);
-    // Select the vertex buffer object we want to enable
-    GLCheck(glBindBuffer(GL_ARRAY_BUFFER, gVertexBufferObject);)
 
-        // Render data
-        // glDrawArrays(GL_TRIANGLES, 0, 3);
-        /*
-            glDrawElements(GL_TRIANGLES,
-                       6,
-                       GL_UNSIGNED_INT,
-                       0);
-        */
-        GLCheck(glDrawElements(GL_TRIANGLES,
-                               6,
-                               GL_UNSIGNED_INT,
-                               0));
+    // Render data
+    // glDrawArrays(GL_TRIANGLES, 0, 3);
+    /*
+        glDrawElements(GL_TRIANGLES,
+                   6,
+                   GL_UNSIGNED_INT,
+                   0);
+    */
+    GLCheck(glDrawElements(GL_TRIANGLES,
+                           18,
+                           GL_UNSIGNED_INT,
+                           0));
     // Stop using our current graphics pipeline
     glUseProgram(0);
 }
 
 void MainLoop()
 {
-
+    SDL_WarpMouseInWindow(gGraphicsApplicationWindow, gScreenWidth / 2, gScreenHeight / 2);
+    SDL_SetRelativeMouseMode(SDL_TRUE);
     while (!gQuit)
     {
         Input();
